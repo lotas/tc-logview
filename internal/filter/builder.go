@@ -8,11 +8,11 @@ import (
 // Params holds the inputs for building a GCP log filter string.
 type Params struct {
 	Cluster    string   // from env config — resource.labels.cluster_name
-	LogType    string   // --type flag — jsonPayload.Type
+	LogTypes   []string // --type flag(s) — jsonPayload.Type
 	Service    string   // --service flag or auto-detected — jsonPayload.serviceContext.service
 	Where      []string // --where flags, field shorthand like: workerPoolId="proj-misc/generic"
 	RawFilter  string   // --filter flag, raw GCP filter expression
-	FieldNames []string // known fields for the log type (from references index), used to validate --where
+	FieldNames []string // known fields for the log type(s) (from references index), used to validate --where
 }
 
 // operators lists supported comparison operators, longest first so that
@@ -31,8 +31,17 @@ func Build(p Params) (string, error) {
 
 	parts = append(parts, fmt.Sprintf("resource.labels.cluster_name=%q", p.Cluster))
 
-	if p.LogType != "" {
-		parts = append(parts, fmt.Sprintf("jsonPayload.Type=%q", p.LogType))
+	switch len(p.LogTypes) {
+	case 0:
+		// no type filter
+	case 1:
+		parts = append(parts, fmt.Sprintf("jsonPayload.Type=%q", p.LogTypes[0]))
+	default:
+		var typeClauses []string
+		for _, t := range p.LogTypes {
+			typeClauses = append(typeClauses, fmt.Sprintf("jsonPayload.Type=%q", t))
+		}
+		parts = append(parts, "("+strings.Join(typeClauses, " OR ")+")")
 	}
 
 	if p.Service != "" {

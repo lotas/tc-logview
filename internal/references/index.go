@@ -132,6 +132,65 @@ func (idx *Index) FieldNames(typeName string) []string {
 	return names
 }
 
+// TypesWithFields returns sorted, deduplicated type names where every field
+// in fieldNames exists in the type's Fields map. Returns nil if fieldNames
+// is empty.
+func (idx *Index) TypesWithFields(fieldNames []string) []string {
+	if len(fieldNames) == 0 {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	var result []string
+
+	for typeName, entries := range idx.entries {
+		if len(entries) == 0 {
+			continue
+		}
+		fields := entries[0].LogType.Fields
+		hasAll := true
+		for _, name := range fieldNames {
+			if _, ok := fields[name]; !ok {
+				hasAll = false
+				break
+			}
+		}
+		if hasAll && !seen[typeName] {
+			seen[typeName] = true
+			result = append(result, typeName)
+		}
+	}
+
+	sort.Strings(result)
+	return result
+}
+
+// FieldNamesForTypes returns the sorted, deduplicated union of field names
+// across all specified types. Returns nil if typeNames is empty.
+func (idx *Index) FieldNamesForTypes(typeNames []string) []string {
+	if len(typeNames) == 0 {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	for _, typeName := range typeNames {
+		entries, ok := idx.entries[typeName]
+		if !ok || len(entries) == 0 {
+			continue
+		}
+		for name := range entries[0].LogType.Fields {
+			seen[name] = true
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // IsEmpty returns true if the index contains no entries.
 func (idx *Index) IsEmpty() bool {
 	return len(idx.entries) == 0

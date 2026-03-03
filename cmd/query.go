@@ -73,14 +73,34 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		idx = nil
 	}
 
-	// Auto-detect service if type is unique
+	// Parse comma-separated types
+	var types []string
+	if queryType != "" {
+		types = strings.Split(queryType, ",")
+	}
+
+	// Resolve types and fields
 	service := queryService
 	var fieldNames []string
-	if idx != nil && queryType != "" {
-		if service == "" {
-			service = idx.ServiceFor(queryType)
+	if idx != nil {
+		// Auto-discover types when --type omitted but --where provided
+		if len(types) == 0 && len(queryWhere) > 0 {
+			whereFields := parseWhereFieldNames(queryWhere)
+			types = idx.TypesWithFields(whereFields)
+			if len(types) == 0 {
+				return fmt.Errorf("no log types found with fields: %s", strings.Join(whereFields, ", "))
+			}
+			fmt.Fprintf(os.Stderr, "Matched types: %s\n", strings.Join(types, ", "))
 		}
-		fieldNames = idx.FieldNames(queryType)
+
+		if len(types) > 0 {
+			fieldNames = idx.FieldNamesForTypes(types)
+		}
+
+		// Auto-detect service only for single type
+		if service == "" && len(types) == 1 {
+			service = idx.ServiceFor(types[0])
+		}
 	}
 
 	// Resolve time window
@@ -92,7 +112,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	// Build filter
 	filterStr, err := filter.Build(filter.Params{
 		Cluster:    env.Cluster,
-		LogType:    queryType,
+		LogTypes:   types,
 		Service:    service,
 		Where:      queryWhere,
 		RawFilter:  queryFilter,
@@ -173,12 +193,15 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		entries[i] = gcp.ExtractFields(raw, fieldNames)
 	}
 
-	// Add service field when query spans multiple services
-	if service == "" {
+	// Remove columns that are empty across all entries
+	fieldNames = filterNonEmptyFields(entries, fieldNames)
+
+	// Add Type column when query spans multiple types (after filtering to always preserve it)
+	if len(types) != 1 {
 		for i, raw := range rawEntries {
-			entries[i].Fields["service"] = gcp.ExtractService(raw)
+			entries[i].Fields["Type"] = gcp.ExtractType(raw)
 		}
-		fieldNames = append([]string{"service"}, fieldNames...)
+		fieldNames = append([]string{"Type"}, fieldNames...)
 	}
 
 	// Select formatter
@@ -193,6 +216,22 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	}
 
 	return formatter.Format(os.Stdout, entries, fieldNames, totalCount)
+}
+
+// parseWhereFieldNames extracts field names from --where clauses.
+// For example, ["taskId=\"abc\"", "runId=1"] returns ["taskId", "runId"].
+func parseWhereFieldNames(wheres []string) []string {
+	operators := []string{"!=", ">=", "<=", "=~", "!~", "=", ">", "<"}
+	var names []string
+	for _, w := range wheres {
+		for _, op := range operators {
+			if idx := strings.Index(w, op); idx > 0 {
+				names = append(names, w[:idx])
+				break
+			}
+		}
+	}
+	return names
 }
 
 // resolveTimeWindow parses the time flags and returns absolute from/to times.
@@ -253,6 +292,20 @@ func parseDuration(s string) (time.Duration, error) {
 		return time.Duration(val) * 24 * time.Hour, nil
 	}
 	return 0, fmt.Errorf("invalid duration unit %q", m[2])
+}
+
+// filterNonEmptyFields returns only the fields that have at least one non-empty value across all entries.
+func filterNonEmptyFields(entries []format.LogEntry, fieldNames []string) []string {
+	var result []string
+	for _, f := range fieldNames {
+		for _, e := range entries {
+			if e.Fields[f] != "" {
+				result = append(result, f)
+				break
+			}
+		}
+	}
+	return result
 }
 
 // listTypeFields returns a formatted string of available fields for a type.

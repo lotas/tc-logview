@@ -188,6 +188,47 @@ func TestExtractService_TextPayload(t *testing.T) {
 	}
 }
 
+func TestExtractType(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  map[string]interface{}
+		want string
+	}{
+		{
+			name: "json payload with Type",
+			raw: map[string]interface{}{
+				"jsonPayload": map[string]interface{}{
+					"Type": "task-created",
+				},
+			},
+			want: "task-created",
+		},
+		{
+			name: "no payload",
+			raw:  map[string]interface{}{},
+			want: "",
+		},
+		{
+			name: "json payload without Type",
+			raw: map[string]interface{}{
+				"jsonPayload": map[string]interface{}{
+					"Fields": map[string]interface{}{},
+				},
+			},
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractType(tt.raw)
+			if got != tt.want {
+				t.Errorf("ExtractType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractFields_ProtoPayload(t *testing.T) {
 	raw := map[string]interface{}{
 		"timestamp": "2026-03-03T12:00:00Z",

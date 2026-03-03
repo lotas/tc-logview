@@ -171,6 +171,19 @@ func ExtractService(raw map[string]interface{}) string {
 	return ""
 }
 
+// ExtractType returns the log type (jsonPayload.Type) from a raw GCP log entry.
+func ExtractType(raw map[string]interface{}) string {
+	jsonBytes, err := json.Marshal(raw)
+	if err != nil {
+		return ""
+	}
+	val := gjson.GetBytes(jsonBytes, "jsonPayload.Type")
+	if !val.Exists() {
+		val = gjson.GetBytes(jsonBytes, "protoPayload.Type")
+	}
+	return val.String()
+}
+
 // EntriesFromJSON unmarshals a JSON array of log entries, typically loaded
 // from a cache file.
 func EntriesFromJSON(data []byte) ([]map[string]interface{}, error) {

@@ -25,9 +25,9 @@ func TestBuild_EmptyCluster(t *testing.T) {
 
 func TestBuild_ClusterTypeService(t *testing.T) {
 	got, err := Build(Params{
-		Cluster: "my-cluster",
-		LogType: "worker-started",
-		Service: "worker-manager",
+		Cluster:  "my-cluster",
+		LogTypes: []string{"worker-started"},
+		Service:  "worker-manager",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -41,7 +41,7 @@ func TestBuild_ClusterTypeService(t *testing.T) {
 func TestBuild_WhereExpansion(t *testing.T) {
 	got, err := Build(Params{
 		Cluster:    "c",
-		LogType:    "worker-stopped",
+		LogTypes:   []string{"worker-stopped"},
 		Where:      []string{`workerPoolId="proj-misc"`},
 		FieldNames: []string{"workerPoolId", "workerId"},
 	})
@@ -114,7 +114,7 @@ func TestBuild_RawFilter(t *testing.T) {
 func TestBuild_FullCombo(t *testing.T) {
 	got, err := Build(Params{
 		Cluster:    "prod-cluster",
-		LogType:    "task-resolved",
+		LogTypes:   []string{"task-resolved"},
 		Service:    "queue",
 		Where:      []string{`workerPoolId="proj-misc/generic"`},
 		RawFilter:  `severity="WARNING"`,
@@ -141,5 +141,63 @@ func TestBuild_FullCombo(t *testing.T) {
 	parts := strings.Split(got, " AND ")
 	if len(parts) != 5 {
 		t.Errorf("expected 5 AND-joined parts, got %d: %s", len(parts), got)
+	}
+}
+
+func TestBuild_MultipleTypes(t *testing.T) {
+	got, err := Build(Params{
+		Cluster:  "c",
+		LogTypes: []string{"task-created", "task-running"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `resource.labels.cluster_name="c" AND (jsonPayload.Type="task-created" OR jsonPayload.Type="task-running")`
+	if got != want {
+		t.Errorf("got:\n  %s\nwant:\n  %s", got, want)
+	}
+}
+
+func TestBuild_SingleTypeInSlice(t *testing.T) {
+	got, err := Build(Params{
+		Cluster:  "c",
+		LogTypes: []string{"task-created"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, `jsonPayload.Type="task-created"`) {
+		t.Errorf("single type should produce simple clause, got: %s", got)
+	}
+	if strings.Contains(got, "OR") {
+		t.Errorf("single type should not produce OR clause, got: %s", got)
+	}
+}
+
+func TestBuild_NoTypes(t *testing.T) {
+	got, err := Build(Params{Cluster: "c"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "jsonPayload.Type") {
+		t.Errorf("no types should produce no type clause, got: %s", got)
+	}
+}
+
+func TestBuild_MultipleTypesWithWhere(t *testing.T) {
+	got, err := Build(Params{
+		Cluster:    "c",
+		LogTypes:   []string{"task-created", "task-running"},
+		Where:      []string{`taskId="abc"`},
+		FieldNames: []string{"taskId", "runId"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, `(jsonPayload.Type="task-created" OR jsonPayload.Type="task-running")`) {
+		t.Errorf("missing OR type clause, got: %s", got)
+	}
+	if !strings.Contains(got, `jsonPayload.Fields.taskId="abc"`) {
+		t.Errorf("missing where clause, got: %s", got)
 	}
 }

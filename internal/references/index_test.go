@@ -238,6 +238,157 @@ func TestAllSorted(t *testing.T) {
 	}
 }
 
+func TestTypesWithFields_SingleField(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	// taskId only exists in task-claimed
+	types := idx.TypesWithFields([]string{"taskId"})
+	if len(types) != 1 || types[0] != "task-claimed" {
+		t.Errorf("TypesWithFields([taskId]) = %v, want [task-claimed]", types)
+	}
+}
+
+func TestTypesWithFields_MultipleFields(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	// taskId AND runId both exist only in task-claimed
+	types := idx.TypesWithFields([]string{"taskId", "runId"})
+	if len(types) != 1 || types[0] != "task-claimed" {
+		t.Errorf("TypesWithFields([taskId, runId]) = %v, want [task-claimed]", types)
+	}
+}
+
+func TestTypesWithFields_SharedField(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	// "method" exists in monitor.apiMethod (both queue and worker-manager copies)
+	types := idx.TypesWithFields([]string{"method"})
+	if len(types) != 1 || types[0] != "monitor.apiMethod" {
+		t.Errorf("TypesWithFields([method]) = %v, want [monitor.apiMethod]", types)
+	}
+}
+
+func TestTypesWithFields_NoMatch(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	types := idx.TypesWithFields([]string{"nonexistent"})
+	if len(types) != 0 {
+		t.Errorf("TypesWithFields([nonexistent]) = %v, want []", types)
+	}
+}
+
+func TestTypesWithFields_EmptyInput(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	types := idx.TypesWithFields(nil)
+	if len(types) != 0 {
+		t.Errorf("TypesWithFields(nil) = %v, want []", types)
+	}
+}
+
+func TestFieldNamesForTypes_Single(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	fields := idx.FieldNamesForTypes([]string{"task-claimed"})
+	expected := []string{"runId", "taskId"}
+	if len(fields) != len(expected) {
+		t.Fatalf("FieldNamesForTypes([task-claimed]) = %v, want %v", fields, expected)
+	}
+	for i, f := range fields {
+		if f != expected[i] {
+			t.Errorf("field[%d] = %q, want %q", i, f, expected[i])
+		}
+	}
+}
+
+func TestFieldNamesForTypes_Multiple(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	// Union of task-claimed (taskId, runId) and worker-stopped (workerId, workerPoolId, reason)
+	fields := idx.FieldNamesForTypes([]string{"task-claimed", "worker-stopped"})
+	expected := []string{"reason", "runId", "taskId", "workerId", "workerPoolId"}
+	if len(fields) != len(expected) {
+		t.Fatalf("FieldNamesForTypes = %v, want %v", fields, expected)
+	}
+	for i, f := range fields {
+		if f != expected[i] {
+			t.Errorf("field[%d] = %q, want %q", i, f, expected[i])
+		}
+	}
+}
+
+func TestFieldNamesForTypes_Empty(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	fields := idx.FieldNamesForTypes(nil)
+	if len(fields) != 0 {
+		t.Errorf("FieldNamesForTypes(nil) = %v, want []", fields)
+	}
+}
+
+func TestFieldNamesForTypes_UnknownType(t *testing.T) {
+	dir := t.TempDir()
+	writeMockData(t, dir)
+
+	idx, err := LoadIndex(dir)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+
+	fields := idx.FieldNamesForTypes([]string{"nonexistent"})
+	if len(fields) != 0 {
+		t.Errorf("FieldNamesForTypes([nonexistent]) = %v, want []", fields)
+	}
+}
+
 func TestIsEmptyOnFreshIndex(t *testing.T) {
 	dir := t.TempDir()
 	// No JSON files written — should produce an empty index.
