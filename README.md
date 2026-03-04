@@ -1,3 +1,7 @@
+
+This repository moved to: [taskcluster/tc-logview](https://github.com/taskcluster/tc-logview)
+---
+
 # tc-logview
 
 A CLI tool for querying GCP Cloud Logging for [Taskcluster](https://taskcluster.net/) services. It knows the Taskcluster log schema — log types, their fields, and which services own them — so you don't have to manually construct GCP filter strings.
