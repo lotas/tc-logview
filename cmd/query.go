@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -183,6 +184,9 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	if queryLimit > 0 && queryLimit < len(rawEntries) {
 		rawEntries = rawEntries[:queryLimit]
 	}
+
+	// Reverse to chronological order (oldest first) for natural top-to-bottom reading
+	slices.Reverse(rawEntries)
 
 	// Extract fields and format
 	if fieldNames == nil {

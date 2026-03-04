@@ -43,7 +43,7 @@ func NewClient(ctx context.Context, projectID, keyPath string) (*Client, error) 
 }
 
 // Query executes a GCP Cloud Logging filter query and returns up to limit
-// entries, newest first.
+// entries, newest first (reversed before display).
 func (c *Client) Query(ctx context.Context, filter string, limit int) (*QueryResult, error) {
 	it := c.adminClient.Entries(ctx, logadmin.Filter(filter), logadmin.NewestFirst())
 
